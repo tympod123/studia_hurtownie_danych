@@ -813,7 +813,7 @@ else:
         "cuisine": "Kuchnia",
         "avg_pairing_quality": "Średnia jakość parowania",
         "n": "Liczba wystąpień",
-    })
+})
     st.dataframe(pretty_ranked, use_container_width=True)
 
     with st.expander("Szybkie statystyki rekomendacji"):
