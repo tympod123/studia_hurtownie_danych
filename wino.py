@@ -49,7 +49,7 @@ def dataset_profile(df: pd.DataFrame) -> dict:
 
 def quick_stats(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
     cols = [c for c in cols if c in df.columns]
-    if not cols:
+    if not cols or len(df) == 0:
         return pd.DataFrame()
     out = df[cols].describe().T[["mean", "50%", "min", "max"]].rename(columns={"50%": "median"})
     return out
@@ -267,7 +267,7 @@ if module == "Analiza jakości wina":
 
     st.divider()
 
-    # --- Model ML (jak w oryginale, ale trochę czytelniej) ---
+    # --- Model ML ---
     st.markdown("## Model ML: RandomForestRegressor")
 
     with st.expander("⚙️ Ustawienia i trening modelu"):
@@ -418,7 +418,6 @@ elif module == "Parowanie wina z jedzeniem":
 
     with c2:
         st.markdown("### Proste statystyki (po filtrach)")
-        # 2–3 proste statystyki: pairing_quality oraz liczność per label
         stats = quick_stats(filtered, ["pairing_quality"])
         if not stats.empty:
             st.dataframe(stats, use_container_width=True)
@@ -430,32 +429,51 @@ elif module == "Parowanie wina z jedzeniem":
 
     st.divider()
 
-    # --- Wizualizacje ---
+    # --- Wizualizacje (POPRAWKA) ---
     st.markdown("## Wizualizacje")
 
-    c1, c2 = st.columns(2)
-    with c1:
-        fig_lbl = px.bar(
-            filtered["quality_label"].value_counts().reset_index(),
-            x="index", y="quality_label",
-            labels={"index": "quality_label", "quality_label": "count"},
-            title="Rozkład quality_label (po filtrach)"
-        )
-        fig_lbl.update_layout(height=450)
-        st.plotly_chart(fig_lbl, use_container_width=True)
+    if len(filtered) == 0:
+        st.warning("Brak danych po filtrach — nie da się narysować wykresów.")
+    else:
+        c1, c2 = st.columns(2)
 
-    with c2:
-        fig_wt = px.bar(
-            filtered.groupby("wine_type")["pairing_quality"].mean().sort_values(ascending=False).head(20).reset_index(),
-            x="wine_type", y="pairing_quality",
-            title="Średnia pairing_quality per wine_type (top 20)"
-        )
-        fig_wt.update_layout(height=450)
-        st.plotly_chart(fig_wt, use_container_width=True)
+        with c1:
+            # odporne na wersje pandas/plotly: zawsze wymuszamy nazwy kolumn
+            vc = filtered["quality_label"].astype(str).value_counts(dropna=False)
+            vc_df = vc.reset_index()
+            vc_df.columns = ["quality_label", "count"]
+
+            fig_lbl = px.bar(
+                vc_df,
+                x="quality_label",
+                y="count",
+                title="Rozkład quality_label (po filtrach)",
+            )
+            fig_lbl.update_layout(height=450)
+            st.plotly_chart(fig_lbl, use_container_width=True)
+
+        with c2:
+            wt_mean = (
+                filtered.groupby("wine_type", dropna=False)["pairing_quality"]
+                .mean()
+                .sort_values(ascending=False)
+                .head(20)
+                .reset_index()
+            )
+            wt_mean.columns = ["wine_type", "avg_pairing_quality"]
+
+            fig_wt = px.bar(
+                wt_mean,
+                x="wine_type",
+                y="avg_pairing_quality",
+                title="Średnia pairing_quality per wine_type (top 20)"
+            )
+            fig_wt.update_layout(height=450)
+            st.plotly_chart(fig_wt, use_container_width=True)
 
     st.divider()
 
-    # --- Rekomendacja dla dania (jak w oryginale) ---
+    # --- Rekomendacja dla dania ---
     st.markdown("## 🔎 Rekomendacje na podstawie nazwy dania")
     chosen_food = st.text_input("Wpisz nazwę dania (fragment):", "")
 
@@ -602,7 +620,6 @@ else:
     # --- Rekomendacje pairingów ---
     st.markdown("## 3) Rekomendacje parowań (wine_food_pairings)")
 
-    # preferuj "red" jeśli występuje w wine_type (ale użytkownik może nadpisać)
     wine_types = sorted(dfp["wine_type"].dropna().unique())
     red_like = [w for w in wine_types if "red" in str(w).lower()]
 
@@ -636,7 +653,6 @@ else:
         st.warning("Brak wyników. Poluzuj filtry lub obniż minimalną pairing_quality.")
         st.stop()
 
-    # ranking: pairing_quality desc, a przy remisach stabilizuj liczbą wystąpień
     ranked = (
         rec.groupby(["food_category", "food_item", "cuisine"], as_index=False)
         .agg(avg_pairing_quality=("pairing_quality", "mean"), n=("pairing_quality", "size"))
@@ -646,13 +662,11 @@ else:
     topk = st.slider("Ile rekomendacji pokazać?", 5, 50, 20)
     st.dataframe(ranked.head(topk), use_container_width=True)
 
-    # szybkie statystyki rekomendacji
     with st.expander("Szybkie statystyki rekomendacji"):
         st.dataframe(quick_stats(rec, ["pairing_quality"]), use_container_width=True)
         if "quality_label" in rec.columns:
             st.dataframe(rec["quality_label"].value_counts().head(10), use_container_width=True)
 
-    # wykresy rekomendacji
     fig_sc = px.scatter(
         ranked.head(300),
         x="avg_pairing_quality",
