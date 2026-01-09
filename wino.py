@@ -813,7 +813,7 @@ else:
         "cuisine": "Kuchnia",
         "avg_pairing_quality": "Średnia jakość parowania",
         "n": "Liczba wystąpień",
-})
+    })
     st.dataframe(pretty_ranked, use_container_width=True)
 
     with st.expander("Szybkie statystyki rekomendacji"):
@@ -830,4 +830,18 @@ else:
         title="Rekomendacje: średnia jakość vs liczność (top 300)",
         labels={
             "avg_pairing_quality": "Średnia jakość parowania",
-            "n": "Liczb
+            "n": "Liczba wystąpień",
+            "food_category": "Kategoria jedzenia",
+        }
+    )
+    fig_sc.update_layout(height=550)
+    st.plotly_chart(fig_sc, use_container_width=True)
+
+    fig_cui = px.bar(
+        ranked.head(300)["cuisine"].value_counts().head(15).reset_index(),
+        x="index", y="cuisine",
+        labels={"index": "Kuchnia", "cuisine": "Liczba"},
+        title="Top kuchnie w rekomendacjach (top 300)"
+    )
+    fig_cui.update_layout(height=450)
+    st.plotly_chart(fig_cui, use_container_width=True)
